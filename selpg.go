@@ -2,11 +2,12 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+
+	flag "github.com/spf13/pflag"
 )
 
 type Args struct {
@@ -19,17 +20,32 @@ type Args struct {
 }
 
 func getArgs(args *Args) {
-	flag.IntVar(&args.s, "s", 0, "start")
-	flag.IntVar(&args.e, "e", 0, "end")
-	flag.IntVar(&args.l, "l", 72, "line")
-	flag.BoolVar(&args.f, "f", false, "final")
-	flag.StringVar(&args.d, "d", "", "input file")
+	flag.IntVarP(&args.s, "start", "s", 0, "start")
+	flag.IntVarP(&args.e, "end", "e", 0, "end")
+	flag.IntVarP(&args.l, "line", "l", -1, "line")
+	flag.BoolVarP(&args.f, "final", "f", false, "final")
+	flag.StringVarP(&args.d, "inputFile", "d", "", "input file")
 	flag.Parse()
 	otherArgs := flag.Args()
 	if len(otherArgs) > 0 {
 		args.inputFile = otherArgs[0]
 	} else {
 		args.inputFile = ""
+	}
+}
+
+func checkArgs(args *Args) {
+	if args.s == 0 || args.e == 0 {
+		os.Stderr.Write([]byte("Please input -s and -e\n"))
+		os.Exit(0)
+	}
+	if args.s > args.e {
+		os.Stderr.Write([]byte("Invalid input about -s and -e\n"))
+		os.Exit(0)
+	}
+	if args.f && args.l != -1 {
+		os.Stderr.Write([]byte("Please choose either -f or -l\n"))
+		os.Exit(0)
 	}
 }
 
@@ -59,6 +75,9 @@ func execution(args *Args) {
 		if args.f {
 			readByF(args, reader, writer)
 		} else {
+			if args.l == -1 {
+				args.l = 72
+			}
 			readByL(args, reader, writer)
 		}
 	} else {
@@ -66,21 +85,24 @@ func execution(args *Args) {
 		writer, err := cmd.StdinPipe()
 		if err != nil {
 			fmt.Println("Error", err)
-			os.Exit(2)
+			os.Exit(1)
 		}
 		if err := cmd.Start(); err != nil {
 			fmt.Println("Error", err)
-			os.Exit(2)
+			os.Exit(1)
 		}
 		if args.f {
 			readByFWithD(args, reader, writer)
 		} else {
+			if args.l == -1 {
+				args.l = 72
+			}
 			readByLWithD(args, reader, writer)
 		}
 		writer.Close()
 		if err := cmd.Wait(); err != nil {
 			fmt.Println("Error")
-			os.Exit(2)
+			os.Exit(1)
 		}
 	}
 }
@@ -101,7 +123,7 @@ func readByL(args *Args, reader *bufio.Reader, writer *bufio.Writer) {
 						break
 					}
 					os.Stderr.Write([]byte("Read failed\n"))
-					os.Exit(2)
+					os.Exit(1)
 				}
 				writer.Write(line)
 				writer.Flush()
@@ -124,10 +146,12 @@ func readByF(args *Args, reader *bufio.Reader, writer *bufio.Writer) {
 					break
 				}
 				os.Stderr.Write([]byte("Read failed\n"))
-				os.Exit(2)
+				os.Exit(1)
 			}
-			writer.WriteByte(char)
-			writer.Flush()
+			if pageCount >= args.s {
+				writer.WriteByte(char)
+				writer.Flush()
+			}
 		}
 	}
 }
@@ -146,7 +170,7 @@ func readByLWithD(args *Args, reader *bufio.Reader, writer io.WriteCloser) {
 						break
 					}
 					os.Stderr.Write([]byte("Read failed\n"))
-					os.Exit(2)
+					os.Exit(1)
 				}
 				writer.Write(line)
 			}
@@ -166,9 +190,11 @@ func readByFWithD(args *Args, reader *bufio.Reader, writer io.WriteCloser) {
 					break
 				}
 				os.Stderr.Write([]byte("Read failed\n"))
-				os.Exit(2)
+				os.Exit(1)
 			}
-			writer.Write([]byte{char})
+			if pageCount >= args.s {
+				writer.Write([]byte{char})
+			}
 		}
 	}
 }
@@ -176,5 +202,6 @@ func readByFWithD(args *Args, reader *bufio.Reader, writer io.WriteCloser) {
 func main() {
 	args := new(Args)
 	getArgs(args)
+	checkArgs(args)
 	execution(args)
 }
