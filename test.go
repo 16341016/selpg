@@ -8,7 +8,7 @@ import (
 
 func main() {
 	reader := bufio.NewReader(os.Stdin)
-	file, err := os.OpenFile("./testD.txt", os.O_RDWR|os.O_CREATE, 0666)
+	file, err := os.OpenFile("./test.txt", os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		os.Stderr.WriteString("Open Failed")
 	}
